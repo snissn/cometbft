@@ -2,6 +2,7 @@ package txindex
 
 import (
 	"context"
+	"time"
 
 	"github.com/cometbft/cometbft/libs/service"
 	"github.com/cometbft/cometbft/state/indexer"
@@ -23,6 +24,17 @@ type IndexerService struct {
 	blockIdxr        indexer.BlockIndexer
 	eventBus         *types.EventBus
 	terminateOnError bool
+	metrics          *Metrics
+}
+
+type IndexerServiceOption func(*IndexerService)
+
+func IndexerServiceWithMetrics(metrics *Metrics) IndexerServiceOption {
+	return func(service *IndexerService) {
+		if metrics != nil {
+			service.metrics = metrics
+		}
+	}
 }
 
 // NewIndexerService returns a new service instance.
@@ -31,9 +43,19 @@ func NewIndexerService(
 	blockIdxr indexer.BlockIndexer,
 	eventBus *types.EventBus,
 	terminateOnError bool,
+	options ...IndexerServiceOption,
 ) *IndexerService {
 
-	is := &IndexerService{txIdxr: txIdxr, blockIdxr: blockIdxr, eventBus: eventBus, terminateOnError: terminateOnError}
+	is := &IndexerService{
+		txIdxr:           txIdxr,
+		blockIdxr:        blockIdxr,
+		eventBus:         eventBus,
+		terminateOnError: terminateOnError,
+		metrics:          NopMetrics(),
+	}
+	for _, option := range options {
+		option(is)
+	}
 	is.BaseService = *service.NewBaseService(nil, "IndexerService", is)
 	return is
 }
@@ -63,12 +85,14 @@ func (is *IndexerService) OnStart() error {
 			case <-blockSub.Canceled():
 				return
 			case msg := <-blockSub.Out():
+				blockStart := time.Now()
 				eventNewBlockEvents := msg.Data().(types.EventDataNewBlockEvents)
 				height := eventNewBlockEvents.Height
 				numTxs := eventNewBlockEvents.NumTxs
 
 				batch := NewBatch(numTxs)
 
+				gatherStart := time.Now()
 				for i := int64(0); i < numTxs; i++ {
 					msg2 := <-txsSub.Out()
 					txResult := msg2.Data().(types.EventDataTx).TxResult
@@ -89,8 +113,12 @@ func (is *IndexerService) OnStart() error {
 						}
 					}
 				}
+				is.metrics.GatherEventsSeconds.Observe(time.Since(gatherStart).Seconds())
 
-				if err := is.blockIdxr.Index(eventNewBlockEvents); err != nil {
+				blockIndexStart := time.Now()
+				err = is.blockIdxr.Index(eventNewBlockEvents)
+				is.metrics.BlockIndexSeconds.Observe(time.Since(blockIndexStart).Seconds())
+				if err != nil {
 					is.Logger.Error("failed to index block", "height", height, "err", err)
 					if is.terminateOnError {
 						if err := is.Stop(); err != nil {
@@ -102,7 +130,10 @@ func (is *IndexerService) OnStart() error {
 					is.Logger.Info("indexed block events", "height", height)
 				}
 
-				if err = is.txIdxr.AddBatch(batch); err != nil {
+				txIndexStart := time.Now()
+				err = is.txIdxr.AddBatch(batch)
+				is.metrics.TxIndexSeconds.Observe(time.Since(txIndexStart).Seconds())
+				if err != nil {
 					is.Logger.Error("failed to index block txs", "height", height, "err", err)
 					if is.terminateOnError {
 						if err := is.Stop(); err != nil {
@@ -111,8 +142,10 @@ func (is *IndexerService) OnStart() error {
 						return
 					}
 				} else {
+					is.metrics.IndexedTxsTotal.Add(float64(numTxs))
 					is.Logger.Trace("indexed transactions", "height", height, "num_txs", numTxs)
 				}
+				is.metrics.BlockTotalSeconds.Observe(time.Since(blockStart).Seconds())
 			}
 		}
 	}()

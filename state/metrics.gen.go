@@ -14,6 +14,118 @@ func PrometheusMetrics(namespace string, labelsAndValues ...string) *Metrics {
 		labels = append(labels, labelsAndValues[i])
 	}
 	return &Metrics{
+		ApplyBlockSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "apply_block_seconds",
+			Help:      "Time spent in the complete ApplyVerifiedBlock state execution path.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		FinalizeBlockSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "finalize_block_seconds",
+			Help:      "Time spent executing FinalizeBlock through the consensus ABCI connection.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		SaveFinalizeBlockResponseSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "save_finalize_block_response_seconds",
+			Help:      "Time spent persisting the FinalizeBlock response.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		SaveTxInfoSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "save_tx_info_seconds",
+			Help:      "Time spent persisting Celestia's per-transaction blockstore lookup records.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		UpdateStateSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "update_state_seconds",
+			Help:      "Time spent deriving the next in-memory consensus state.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		BlockCommitSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "block_commit_seconds",
+			Help:      "Time spent in BlockExecutor.Commit, including mempool synchronization.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		MempoolLockWaitSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "mempool_lock_wait_seconds",
+			Help:      "Time spent waiting to acquire the mempool lock during block commit.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		MempoolLockHeldSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "mempool_lock_held_seconds",
+			Help:      "Time the mempool lock is held during block commit.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		FlushAppConnSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "flush_app_conn_seconds",
+			Help:      "Time spent flushing outstanding mempool ABCI requests before app commit.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		AppCommitSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "app_commit_seconds",
+			Help:      "Time spent executing the ABCI Commit call.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		MempoolUpdateSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "mempool_update_seconds",
+			Help:      "Time spent updating the mempool after app commit.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		EvidenceUpdateSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "evidence_update_seconds",
+			Help:      "Time spent updating the evidence pool after app commit.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		StateSaveSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "state_save_seconds",
+			Help:      "Time spent saving the post-commit consensus state.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		FireEventsSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "fire_events_seconds",
+			Help:      "Time spent publishing block and transaction events.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
 		BlockProcessingTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: MetricsSubsystem,
@@ -51,10 +163,24 @@ func PrometheusMetrics(namespace string, labelsAndValues ...string) *Metrics {
 
 func NopMetrics() *Metrics {
 	return &Metrics{
-		BlockProcessingTime:   discard.NewHistogram(),
-		ConsensusParamUpdates: discard.NewCounter(),
-		ValidatorSetUpdates:   discard.NewCounter(),
-		RejectedTransactions:  discard.NewCounter(),
-		ProcessedTransactions: discard.NewCounter(),
+		ApplyBlockSeconds:                discard.NewHistogram(),
+		FinalizeBlockSeconds:             discard.NewHistogram(),
+		SaveFinalizeBlockResponseSeconds: discard.NewHistogram(),
+		SaveTxInfoSeconds:                discard.NewHistogram(),
+		UpdateStateSeconds:               discard.NewHistogram(),
+		BlockCommitSeconds:               discard.NewHistogram(),
+		MempoolLockWaitSeconds:           discard.NewHistogram(),
+		MempoolLockHeldSeconds:           discard.NewHistogram(),
+		FlushAppConnSeconds:              discard.NewHistogram(),
+		AppCommitSeconds:                 discard.NewHistogram(),
+		MempoolUpdateSeconds:             discard.NewHistogram(),
+		EvidenceUpdateSeconds:            discard.NewHistogram(),
+		StateSaveSeconds:                 discard.NewHistogram(),
+		FireEventsSeconds:                discard.NewHistogram(),
+		BlockProcessingTime:              discard.NewHistogram(),
+		ConsensusParamUpdates:            discard.NewCounter(),
+		ValidatorSetUpdates:              discard.NewCounter(),
+		RejectedTransactions:             discard.NewCounter(),
+		ProcessedTransactions:            discard.NewCounter(),
 	}
 }

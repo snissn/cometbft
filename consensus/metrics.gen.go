@@ -14,6 +14,70 @@ func PrometheusMetrics(namespace string, labelsAndValues ...string) *Metrics {
 		labels = append(labels, labelsAndValues[i])
 	}
 	return &Metrics{
+		CommitFinalizeSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "commit_finalize_seconds",
+			Help:      "Time spent in the full consensus finalize-commit path before NewHeight.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		CommitBlockStoreSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "commit_block_store_seconds",
+			Help:      "Time spent saving the committed block to the block store.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		CommitBlockStoreLockSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "commit_block_store_lock_seconds",
+			Help:      "Time spent reacquiring the consensus locks after saving the block.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		CommitConsensusWALSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "commit_consensus_wal_seconds",
+			Help:      "Time spent synchronously writing the consensus end-height WAL record.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		CommitApplyBlockSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "commit_apply_block_seconds",
+			Help:      "Time spent applying the verified block through the state executor.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		CommitApplyBlockLockSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "commit_apply_block_lock_seconds",
+			Help:      "Time spent reacquiring the consensus locks after applying the block.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		CommitRecordMetricsSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "commit_record_metrics_seconds",
+			Help:      "Time spent recording post-commit consensus metrics.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
+		CommitUpdateStateSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "commit_update_state_seconds",
+			Help:      "Time spent transitioning the consensus state to NewHeight.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
 		Height: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: MetricsSubsystem,
@@ -227,6 +291,14 @@ func PrometheusMetrics(namespace string, labelsAndValues ...string) *Metrics {
 
 func NopMetrics() *Metrics {
 	return &Metrics{
+		CommitFinalizeSeconds:        discard.NewHistogram(),
+		CommitBlockStoreSeconds:      discard.NewHistogram(),
+		CommitBlockStoreLockSeconds:  discard.NewHistogram(),
+		CommitConsensusWALSeconds:    discard.NewHistogram(),
+		CommitApplyBlockSeconds:      discard.NewHistogram(),
+		CommitApplyBlockLockSeconds:  discard.NewHistogram(),
+		CommitRecordMetricsSeconds:   discard.NewHistogram(),
+		CommitUpdateStateSeconds:     discard.NewHistogram(),
 		Height:                       discard.NewGauge(),
 		ValidatorLastSignedHeight:    discard.NewGauge(),
 		Rounds:                       discard.NewGauge(),

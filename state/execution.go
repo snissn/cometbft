@@ -305,7 +305,10 @@ func (blockExec *BlockExecutor) ApplyBlock(
 }
 
 func (blockExec *BlockExecutor) applyBlock(state State, blockID types.BlockID, block *types.Block, lastCommit *types.Commit) (State, error) {
-	startTime := time.Now().UnixNano()
+	applyStart := time.Now()
+	defer func() {
+		blockExec.metrics.ApplyBlockSeconds.Observe(time.Since(applyStart).Seconds())
+	}()
 
 	// Unmarshal blob txs
 	txs := make([][]byte, len(block.Txs))
@@ -318,6 +321,7 @@ func (blockExec *BlockExecutor) applyBlock(state State, blockID types.BlockID, b
 	}
 	pbHeader := block.Header.ToProto()
 
+	finalizeStart := time.Now()
 	abciResponse, err := blockExec.proxyApp.FinalizeBlock(context.TODO(), &abci.RequestFinalizeBlock{
 		Hash:               block.Hash(),
 		NextValidatorsHash: block.NextValidatorsHash,
@@ -331,8 +335,9 @@ func (blockExec *BlockExecutor) applyBlock(state State, blockID types.BlockID, b
 		// needed for v3 to sync with multiplexer as the header is stored in state
 		Header: pbHeader,
 	})
-	endTime := time.Now().UnixNano()
-	blockExec.metrics.BlockProcessingTime.Observe(float64(endTime-startTime) / 1000000)
+	finalizeDuration := time.Since(finalizeStart)
+	blockExec.metrics.FinalizeBlockSeconds.Observe(finalizeDuration.Seconds())
+	blockExec.metrics.BlockProcessingTime.Observe(float64(finalizeDuration.Nanoseconds()) / 1000000)
 	if err != nil {
 		blockExec.logger.Error("error in proxyAppConn.FinalizeBlock", "err", err)
 		return state, err
@@ -356,17 +361,21 @@ func (blockExec *BlockExecutor) applyBlock(state State, blockID types.BlockID, b
 	// This needs to be done prior to saving state
 	// for correct crash recovery
 	if blockExec.blockStore != nil {
+		saveTxInfoStart := time.Now()
 		if err := blockExec.blockStore.SaveTxInfo(block, abciResponse.TxResults); err != nil {
 			return state, err
 		}
+		blockExec.metrics.SaveTxInfoSeconds.Observe(time.Since(saveTxInfoStart).Seconds())
 	}
 
 	fail.Fail() // XXX
 
 	// Save the results before we commit.
+	saveFinalizeResponseStart := time.Now()
 	if err := blockExec.store.SaveFinalizeBlockResponse(block.Height, abciResponse); err != nil {
 		return state, err
 	}
+	blockExec.metrics.SaveFinalizeBlockResponseSeconds.Observe(time.Since(saveFinalizeResponseStart).Seconds())
 
 	fail.Fail() // XXX
 
@@ -389,7 +398,9 @@ func (blockExec *BlockExecutor) applyBlock(state State, blockID types.BlockID, b
 	}
 
 	// Update the state with the block and responses.
+	updateStateStart := time.Now()
 	state, err = updateState(state, blockID, &block.Header, abciResponse, validatorUpdates)
+	blockExec.metrics.UpdateStateSeconds.Observe(time.Since(updateStateStart).Seconds())
 	if err != nil {
 		return state, fmt.Errorf("commit failed for application: %v", err)
 	}
@@ -401,15 +412,19 @@ func (blockExec *BlockExecutor) applyBlock(state State, blockID types.BlockID, b
 	}
 
 	// Update evpool with the latest state.
+	evidenceUpdateStart := time.Now()
 	blockExec.evpool.Update(state, block.Evidence.Evidence)
+	blockExec.metrics.EvidenceUpdateSeconds.Observe(time.Since(evidenceUpdateStart).Seconds())
 
 	fail.Fail() // XXX
 
 	// Update the app hash and save the state.
 	state.AppHash = abciResponse.AppHash
+	stateSaveStart := time.Now()
 	if err := blockExec.store.Save(state); err != nil {
 		return state, err
 	}
+	blockExec.metrics.StateSaveSeconds.Observe(time.Since(stateSaveStart).Seconds())
 
 	fail.Fail() // XXX
 
@@ -425,7 +440,9 @@ func (blockExec *BlockExecutor) applyBlock(state State, blockID types.BlockID, b
 
 	// Events are fired after everything else.
 	// NOTE: if we crash between Commit and Save, events wont be fired during replay
+	fireEventsStart := time.Now()
 	fireEvents(blockExec.logger, blockExec.eventBus, block, blockID, abciResponse, validatorUpdates, state.Validators, lastCommit)
+	blockExec.metrics.FireEventsSeconds.Observe(time.Since(fireEventsStart).Seconds())
 
 	return state, nil
 }
@@ -497,19 +514,34 @@ func (blockExec *BlockExecutor) Commit(
 	block *types.Block,
 	abciResponse *abci.ResponseFinalizeBlock,
 ) (int64, error) {
+	commitStart := time.Now()
+	defer func() {
+		blockExec.metrics.BlockCommitSeconds.Observe(time.Since(commitStart).Seconds())
+	}()
+
+	lockWaitStart := time.Now()
 	blockExec.mempool.Lock()
-	defer blockExec.mempool.Unlock()
+	blockExec.metrics.MempoolLockWaitSeconds.Observe(time.Since(lockWaitStart).Seconds())
+	lockHeldStart := time.Now()
+	defer func() {
+		blockExec.mempool.Unlock()
+		blockExec.metrics.MempoolLockHeldSeconds.Observe(time.Since(lockHeldStart).Seconds())
+	}()
 
 	// while mempool is Locked, flush to ensure all async requests have completed
 	// in the ABCI app before Commit.
+	flushStart := time.Now()
 	err := blockExec.mempool.FlushAppConn()
+	blockExec.metrics.FlushAppConnSeconds.Observe(time.Since(flushStart).Seconds())
 	if err != nil {
 		blockExec.logger.Error("client error during mempool.FlushAppConn", "err", err)
 		return 0, err
 	}
 
 	// Commit block, get hash back
+	appCommitStart := time.Now()
 	res, err := blockExec.proxyApp.Commit(context.TODO())
+	blockExec.metrics.AppCommitSeconds.Observe(time.Since(appCommitStart).Seconds())
 	if err != nil {
 		blockExec.logger.Error("client error during proxyAppConn.CommitSync", "err", err)
 		return 0, err
@@ -523,6 +555,7 @@ func (blockExec *BlockExecutor) Commit(
 	)
 
 	// Update mempool.
+	mempoolUpdateStart := time.Now()
 	err = blockExec.mempool.Update(
 		block.Height,
 		types.CachedTxFromTxs(block.Txs),
@@ -530,6 +563,7 @@ func (blockExec *BlockExecutor) Commit(
 		TxPreCheck(state),
 		TxPostCheck(state),
 	)
+	blockExec.metrics.MempoolUpdateSeconds.Observe(time.Since(mempoolUpdateStart).Seconds())
 
 	return res.RetainHeight, err
 }

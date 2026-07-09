@@ -320,6 +320,10 @@ func NewNodeWithContext(ctx context.Context,
 	}
 
 	csMetrics, p2pMetrics, memplMetrics, smMetrics, abciMetrics, bsMetrics, ssMetrics := metricsProvider(genDoc.ChainID)
+	txIndexerMetrics := txindex.NopMetrics()
+	if smMetrics != nil && smMetrics.TxIndexerMetrics != nil {
+		txIndexerMetrics = smMetrics.TxIndexerMetrics
+	}
 
 	// Create the proxyApp and establish connections to the ABCI app (consensus, mempool, query).
 	proxyApp, err := createAndStartProxyAppConns(clientCreator, logger, abciMetrics)
@@ -337,7 +341,7 @@ func NewNodeWithContext(ctx context.Context,
 	}
 
 	indexerService, txIndexer, blockIndexer, err := createAndStartIndexerService(config,
-		genDoc.ChainID, dbProvider, eventBus, logger)
+		genDoc.ChainID, dbProvider, eventBus, logger, txIndexerMetrics)
 	if err != nil {
 		return nil, err
 	}
