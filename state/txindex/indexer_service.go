@@ -31,7 +31,9 @@ type IndexerServiceOption func(*IndexerService)
 
 func IndexerServiceWithMetrics(metrics *Metrics) IndexerServiceOption {
 	return func(service *IndexerService) {
-		service.metrics = metrics
+		if metrics != nil {
+			service.metrics = metrics
+		}
 	}
 }
 

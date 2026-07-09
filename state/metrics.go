@@ -2,6 +2,8 @@ package state
 
 import (
 	"github.com/go-kit/kit/metrics"
+
+	"github.com/cometbft/cometbft/state/txindex"
 )
 
 const (
@@ -14,6 +16,11 @@ const (
 
 // Metrics contains metrics exposed by this package.
 type Metrics struct {
+	// TxIndexerMetrics carries the asynchronous indexer metrics selected by the
+	// same provider as the rest of the state metrics. Custom providers may leave
+	// it nil to keep tx-index instrumentation disabled.
+	TxIndexerMetrics *txindex.Metrics
+
 	// Time spent in the complete ApplyVerifiedBlock state execution path.
 	ApplyBlockSeconds metrics.Histogram `metrics_buckettype:"exprange" metrics_bucketsizes:"0.0001, 10, 16"`
 

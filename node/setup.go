@@ -91,15 +91,19 @@ type MetricsProvider func(chainID string) (*cs.Metrics, *p2p.Metrics, *mempl.Met
 func DefaultMetricsProvider(config *cfg.InstrumentationConfig) MetricsProvider {
 	return func(chainID string) (*cs.Metrics, *p2p.Metrics, *mempl.Metrics, *sm.Metrics, *proxy.Metrics, *blocksync.Metrics, *statesync.Metrics) {
 		if config.Prometheus {
+			stateMetrics := sm.PrometheusMetrics(config.Namespace, "chain_id", chainID)
+			stateMetrics.TxIndexerMetrics = txindex.PrometheusMetrics(config.Namespace, "chain_id", chainID)
 			return cs.PrometheusMetrics(config.Namespace, "chain_id", chainID),
 				p2p.PrometheusMetrics(config.Namespace, "chain_id", chainID),
 				mempl.PrometheusMetrics(config.Namespace, "chain_id", chainID),
-				sm.PrometheusMetrics(config.Namespace, "chain_id", chainID),
+				stateMetrics,
 				proxy.PrometheusMetrics(config.Namespace, "chain_id", chainID),
 				blocksync.PrometheusMetrics(config.Namespace, "chain_id", chainID),
 				statesync.PrometheusMetrics(config.Namespace, "chain_id", chainID)
 		}
-		return cs.NopMetrics(), p2p.NopMetrics(), mempl.NopMetrics(), sm.NopMetrics(), proxy.NopMetrics(), blocksync.NopMetrics(), statesync.NopMetrics()
+		stateMetrics := sm.NopMetrics()
+		stateMetrics.TxIndexerMetrics = txindex.NopMetrics()
+		return cs.NopMetrics(), p2p.NopMetrics(), mempl.NopMetrics(), stateMetrics, proxy.NopMetrics(), blocksync.NopMetrics(), statesync.NopMetrics()
 	}
 }
 
@@ -153,6 +157,7 @@ func createAndStartIndexerService(
 	dbProvider cfg.DBProvider,
 	eventBus *types.EventBus,
 	logger log.Logger,
+	metrics *txindex.Metrics,
 ) (*txindex.IndexerService, txindex.TxIndexer, indexer.BlockIndexer, error) {
 	var (
 		txIndexer    txindex.TxIndexer
@@ -169,9 +174,8 @@ func createAndStartIndexerService(
 
 	txIndexer.SetLogger(logger.With("module", "txindex"))
 	blockIndexer.SetLogger(logger.With("module", "txindex"))
-	metrics := txindex.NopMetrics()
-	if config.Instrumentation.Prometheus {
-		metrics = txindex.PrometheusMetrics(config.Instrumentation.Namespace, "chain_id", chainID)
+	if metrics == nil {
+		metrics = txindex.NopMetrics()
 	}
 
 	indexerService := txindex.NewIndexerService(
