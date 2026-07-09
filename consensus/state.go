@@ -1694,6 +1694,7 @@ func (cs *State) finalizeCommit(height int64) {
 		)
 		return
 	}
+	commitStart := time.Now()
 
 	cs.calculatePrevoteMessageDelayMetrics()
 
@@ -1728,6 +1729,7 @@ func (cs *State) finalizeCommit(height int64) {
 
 	// Save to blockStore.
 	if cs.blockStore.Height() < block.Height {
+		blockStoreStart := time.Now()
 		// NOTE: the seenCommit is local justification to commit this block,
 		// but may differ from the LastCommit included in the next block
 		seenExtendedCommit := cs.Votes.Precommits(cs.CommitRound).MakeExtendedCommit(cs.state.ConsensusParams.ABCI)
@@ -1736,6 +1738,7 @@ func (cs *State) finalizeCommit(height int64) {
 		} else {
 			cs.blockStore.SaveBlock(block, blockParts, seenExtendedCommit.ToCommit())
 		}
+		cs.metrics.CommitBlockStoreSeconds.Observe(time.Since(blockStoreStart).Seconds())
 	} else {
 		// Happens during replay if we already saved the block but didn't commit
 		logger.Debug("calling finalizeCommit on already stored block", "height", block.Height)
@@ -1757,12 +1760,14 @@ func (cs *State) finalizeCommit(height int64) {
 	// successfully call ApplyBlock (ie. later here, or in Handshake after
 	// restart).
 	endMsg := EndHeightMessage{height}
+	walStart := time.Now()
 	if err := cs.wal.WriteSync(endMsg); err != nil { // NOTE: fsync
 		panic(fmt.Sprintf(
 			"failed to write %v msg to consensus WAL due to %v; check your file system and restart the node",
 			endMsg, err,
 		))
 	}
+	cs.metrics.CommitConsensusWALSeconds.Observe(time.Since(walStart).Seconds())
 
 	fail.Fail() // XXX
 
@@ -1772,6 +1777,7 @@ func (cs *State) finalizeCommit(height int64) {
 	// Execute and commit the block, update and save the state, and update the mempool.
 	// We use apply verified block here because we have verified the block in this function already.
 	// NOTE The block.AppHash won't reflect these txs until the next block.
+	applyStart := time.Now()
 	stateCopy, err := cs.blockExec.ApplyVerifiedBlock(
 		stateCopy,
 		types.BlockID{
@@ -1783,14 +1789,20 @@ func (cs *State) finalizeCommit(height int64) {
 	if err != nil {
 		panic(fmt.Sprintf("failed to apply block; error %v", err))
 	}
+	cs.metrics.CommitApplyBlockSeconds.Observe(time.Since(applyStart).Seconds())
 
 	fail.Fail() // XXX
 
 	// must be called before we update state
+	recordMetricsStart := time.Now()
 	cs.recordMetrics(height, block)
+	cs.metrics.CommitRecordMetricsSeconds.Observe(time.Since(recordMetricsStart).Seconds())
 
 	// NewHeightStep!
+	updateStateStart := time.Now()
 	cs.updateToState(stateCopy)
+	cs.metrics.CommitUpdateStateSeconds.Observe(time.Since(updateStateStart).Seconds())
+	cs.metrics.CommitFinalizeSeconds.Observe(time.Since(commitStart).Seconds())
 
 	fail.Fail() // XXX
 
