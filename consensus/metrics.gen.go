@@ -33,7 +33,7 @@ func PrometheusMetrics(namespace string, labelsAndValues ...string) *Metrics {
 		CommitConsensusWALSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: MetricsSubsystem,
-			Name:      "commit_consensus_walseconds",
+			Name:      "commit_consensus_wal_seconds",
 			Help:      "Time spent synchronously writing the consensus end-height WAL record.",
 
 			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),

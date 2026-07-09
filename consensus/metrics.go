@@ -28,7 +28,7 @@ type Metrics struct {
 	CommitBlockStoreSeconds metrics.Histogram `metrics_buckettype:"exprange" metrics_bucketsizes:"0.0001, 10, 16"`
 
 	// Time spent synchronously writing the consensus end-height WAL record.
-	CommitConsensusWALSeconds metrics.Histogram `metrics_buckettype:"exprange" metrics_bucketsizes:"0.0001, 10, 16"`
+	CommitConsensusWALSeconds metrics.Histogram `metrics_name:"commit_consensus_wal_seconds" metrics_buckettype:"exprange" metrics_bucketsizes:"0.0001, 10, 16"`
 
 	// Time spent applying the verified block through the state executor.
 	CommitApplyBlockSeconds metrics.Histogram `metrics_buckettype:"exprange" metrics_bucketsizes:"0.0001, 10, 16"`
