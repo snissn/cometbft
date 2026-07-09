@@ -21,6 +21,30 @@ const (
 
 // Metrics contains metrics exposed by this package.
 type Metrics struct {
+	// Time spent in the full consensus finalize-commit path before NewHeight.
+	CommitFinalizeSeconds metrics.Histogram `metrics_buckettype:"exprange" metrics_bucketsizes:"0.0001, 10, 16"`
+
+	// Time spent saving the committed block to the block store.
+	CommitBlockStoreSeconds metrics.Histogram `metrics_buckettype:"exprange" metrics_bucketsizes:"0.0001, 10, 16"`
+
+	// Time spent reacquiring the consensus locks after saving the block.
+	CommitBlockStoreLockSeconds metrics.Histogram `metrics_buckettype:"exprange" metrics_bucketsizes:"0.0001, 10, 16"`
+
+	// Time spent synchronously writing the consensus end-height WAL record.
+	CommitConsensusWALSeconds metrics.Histogram `metrics_name:"commit_consensus_wal_seconds" metrics_buckettype:"exprange" metrics_bucketsizes:"0.0001, 10, 16"`
+
+	// Time spent applying the verified block through the state executor.
+	CommitApplyBlockSeconds metrics.Histogram `metrics_buckettype:"exprange" metrics_bucketsizes:"0.0001, 10, 16"`
+
+	// Time spent reacquiring the consensus locks after applying the block.
+	CommitApplyBlockLockSeconds metrics.Histogram `metrics_buckettype:"exprange" metrics_bucketsizes:"0.0001, 10, 16"`
+
+	// Time spent recording post-commit consensus metrics.
+	CommitRecordMetricsSeconds metrics.Histogram `metrics_buckettype:"exprange" metrics_bucketsizes:"0.0001, 10, 16"`
+
+	// Time spent transitioning the consensus state to NewHeight.
+	CommitUpdateStateSeconds metrics.Histogram `metrics_buckettype:"exprange" metrics_bucketsizes:"0.0001, 10, 16"`
+
 	// Height of the chain.
 	Height metrics.Gauge
 
