@@ -23,6 +23,9 @@ type Metrics struct {
 	// Time spent persisting the FinalizeBlock response.
 	SaveFinalizeBlockResponseSeconds metrics.Histogram `metrics_buckettype:"exprange" metrics_bucketsizes:"0.0001, 10, 16"`
 
+	// Time spent persisting Celestia's per-transaction blockstore lookup records.
+	SaveTxInfoSeconds metrics.Histogram `metrics_buckettype:"exprange" metrics_bucketsizes:"0.0001, 10, 16"`
+
 	// Time spent deriving the next in-memory consensus state.
 	UpdateStateSeconds metrics.Histogram `metrics_buckettype:"exprange" metrics_bucketsizes:"0.0001, 10, 16"`
 

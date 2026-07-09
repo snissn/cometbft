@@ -361,9 +361,11 @@ func (blockExec *BlockExecutor) applyBlock(state State, blockID types.BlockID, b
 	// This needs to be done prior to saving state
 	// for correct crash recovery
 	if blockExec.blockStore != nil {
+		saveTxInfoStart := time.Now()
 		if err := blockExec.blockStore.SaveTxInfo(block, abciResponse.TxResults); err != nil {
 			return state, err
 		}
+		blockExec.metrics.SaveTxInfoSeconds.Observe(time.Since(saveTxInfoStart).Seconds())
 	}
 
 	fail.Fail() // XXX

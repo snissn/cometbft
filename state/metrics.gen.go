@@ -38,6 +38,14 @@ func PrometheusMetrics(namespace string, labelsAndValues ...string) *Metrics {
 
 			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
 		}, labels).With(labelsAndValues...),
+		SaveTxInfoSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "save_tx_info_seconds",
+			Help:      "Time spent persisting Celestia's per-transaction blockstore lookup records.",
+
+			Buckets: stdprometheus.ExponentialBucketsRange(0.0001, 10, 16),
+		}, labels).With(labelsAndValues...),
 		UpdateStateSeconds: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: MetricsSubsystem,
@@ -158,6 +166,7 @@ func NopMetrics() *Metrics {
 		ApplyBlockSeconds:                discard.NewHistogram(),
 		FinalizeBlockSeconds:             discard.NewHistogram(),
 		SaveFinalizeBlockResponseSeconds: discard.NewHistogram(),
+		SaveTxInfoSeconds:                discard.NewHistogram(),
 		UpdateStateSeconds:               discard.NewHistogram(),
 		BlockCommitSeconds:               discard.NewHistogram(),
 		MempoolLockWaitSeconds:           discard.NewHistogram(),
